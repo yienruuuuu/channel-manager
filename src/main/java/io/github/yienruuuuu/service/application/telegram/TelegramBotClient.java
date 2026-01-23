@@ -6,10 +6,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod;
+import org.telegram.telegrambots.meta.api.methods.send.SendAnimation;
+import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
+import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
+import org.telegram.telegrambots.meta.api.objects.message.Message;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -43,6 +51,108 @@ public class TelegramBotClient {
      * @return API 回傳結果，失敗時回傳 null
      */
     public <T extends Serializable, Method extends BotApiMethod<T>> T send(Method method, Bot bot) {
+        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
+        try {
+            return telegramClient.execute(method);
+        } catch (TelegramApiException e) {
+            handleException(e, method.getMethod());
+            return null;
+        }
+    }
+
+    /**
+     * 發送媒體群組（相簿）訊息。
+     *
+     * @param method SendMediaGroup 方法
+     * @param bot    目標 Bot
+     * @return 回傳的訊息列表，失敗時回傳 null
+     */
+    public List<Message> send(SendMediaGroup method, Bot bot) {
+        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
+        try {
+            return telegramClient.execute(method);
+        } catch (TelegramApiException e) {
+            handleException(e, method.getMethod());
+            return null;
+        }
+    }
+
+    /**
+     * 發送圖片訊息。
+     *
+     * @param method SendPhoto 方法
+     * @param bot    目標 Bot
+     * @return 回傳的訊息，失敗時回傳 null
+     */
+    public Message send(SendPhoto method, Bot bot) {
+        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
+        try {
+            return telegramClient.execute(method);
+        } catch (TelegramApiException e) {
+            handleException(e, method.getMethod());
+            return null;
+        }
+    }
+
+    /**
+     * 發送影片訊息。
+     *
+     * @param method SendVideo 方法
+     * @param bot    目標 Bot
+     * @return 回傳的訊息，失敗時回傳 null
+     */
+    public Message send(SendVideo method, Bot bot) {
+        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
+        try {
+            return telegramClient.execute(method);
+        } catch (TelegramApiException e) {
+            handleException(e, method.getMethod());
+            return null;
+        }
+    }
+
+    /**
+     * 發送文件訊息。
+     *
+     * @param method SendDocument 方法
+     * @param bot    目標 Bot
+     * @return 回傳的訊息，失敗時回傳 null
+     */
+    public Message send(SendDocument method, Bot bot) {
+        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
+        try {
+            return telegramClient.execute(method);
+        } catch (TelegramApiException e) {
+            handleException(e, method.getMethod());
+            return null;
+        }
+    }
+
+    /**
+     * 發送音訊訊息。
+     *
+     * @param method SendAudio 方法
+     * @param bot    目標 Bot
+     * @return 回傳的訊息，失敗時回傳 null
+     */
+    public Message send(SendAudio method, Bot bot) {
+        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
+        try {
+            return telegramClient.execute(method);
+        } catch (TelegramApiException e) {
+            handleException(e, method.getMethod());
+            return null;
+        }
+    }
+
+    /**
+     * 發送動圖訊息。
+     *
+     * @param method SendAnimation 方法
+     * @param bot    目標 Bot
+     * @return 回傳的訊息，失敗時回傳 null
+     */
+    public Message send(SendAnimation method, Bot bot) {
         TelegramClient telegramClient = getOrCreateTelegramClient(bot);
         try {
             return telegramClient.execute(method);
