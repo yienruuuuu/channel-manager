@@ -14,10 +14,7 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
-    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    //lang
-    implementation 'org.apache.commons:commons-lang3:3.14.0'
     //telegrambots
     implementation 'org.telegram:telegrambots-longpolling:7.10.0'
     implementation 'org.telegram:telegrambots-client:7.10.0'
@@ -26,21 +23,14 @@ dependencies {
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
     //postgresql
     implementation 'org.postgresql:postgresql:42.7.4'
-    //swagger
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
     //lombok
     compileOnly 'org.projectlombok:lombok:1.18.20'
     annotationProcessor 'org.projectlombok:lombok:1.18.20'
-    //cache
-    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
     //test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     //版控使用flyway
     implementation 'org.flywaydb:flyway-core:8.5.13'
     implementation 'org.flywaydb:flyway-postgresql:8.5.13'
-    //映射器MapStruct
-    implementation 'org.mapstruct:mapstruct:1.5.5.Final'
-    annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 }
 
 test {

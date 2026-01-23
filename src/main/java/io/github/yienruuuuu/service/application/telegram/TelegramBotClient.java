@@ -5,19 +5,11 @@ import io.github.yienruuuuu.repository.BotRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
-import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod;
-import org.telegram.telegrambots.meta.api.methods.send.SendAnimation;
-import org.telegram.telegrambots.meta.api.methods.send.SendPaidMedia;
-import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
-import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
-import org.telegram.telegrambots.meta.api.objects.File;
-import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 
 import java.io.Serializable;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -45,98 +37,6 @@ public class TelegramBotClient {
             return telegramClient.execute(method);
         } catch (TelegramApiException e) {
             handleException(e, method.getMethod());
-            return null;
-        }
-    }
-
-    /**
-     * send GIF
-     */
-    public Message send(SendAnimation animation, Bot bot) {
-        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
-        try {
-            return telegramClient.execute(animation);
-        } catch (TelegramApiException e) {
-            handleException(e, "傳送GIF");
-        }
-        return null;
-    }
-
-    /**
-     * send photo
-     */
-    public Message send(SendPhoto photo, Bot bot) {
-        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
-        try {
-            return telegramClient.execute(photo);
-        } catch (TelegramApiException e) {
-            handleException(e, "傳送圖片");
-        }
-        return null;
-    }
-
-    /**
-     * 取得文件的通用方法
-     */
-    public File getFile(GetFile getFile, Bot bot) {
-        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
-        try {
-            return telegramClient.execute(getFile);
-        } catch (TelegramApiException e) {
-            handleException(e, "getFile");
-            return null;
-        }
-    }
-
-    /**
-     * send Video
-     */
-    public Message send(SendVideo video, Bot bot) {
-        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
-        try {
-            return telegramClient.execute(video);
-        } catch (TelegramApiException e) {
-            handleException(e, "傳送Video");
-        }
-        return null;
-    }
-
-    /**
-     * 下載文件的通用方法
-     */
-    public java.io.File downloadFile(File file, Bot bot) {
-        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
-        try {
-            return telegramClient.downloadFile(file);
-        } catch (TelegramApiException e) {
-            handleException(e, "getFile");
-            return null;
-        }
-    }
-
-    /**
-     * 下載文件的通用方法
-     */
-    public java.io.File downloadFileByFilePath(String filePath, Bot bot) {
-        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
-        try {
-            return telegramClient.downloadFile(filePath);
-        } catch (TelegramApiException e) {
-            handleException(e, "downloadFileByFilePath");
-            return null;
-        }
-    }
-
-
-    /**
-     * 付費圖片傳送
-     */
-    public List<Message> send(SendPaidMedia sendPaidMedia, Bot bot) {
-        TelegramClient telegramClient = getOrCreateTelegramClient(bot);
-        try {
-            return telegramClient.execute(sendPaidMedia);
-        } catch (TelegramApiException e) {
-            handleException(e, "send paid media");
             return null;
         }
     }

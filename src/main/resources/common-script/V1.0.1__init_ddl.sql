@@ -1,6 +1,9 @@
-CREATE TABLE IF NOT EXISTS bot
+CREATE SCHEMA IF NOT EXISTS tg_draw_bot;
+
+DROP TABLE IF EXISTS tg_draw_bot.bot;
+CREATE TABLE tg_draw_bot.bot
 (
-    id                     INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    id                     SERIAL PRIMARY KEY,
     type                   VARCHAR(50) NOT NULL DEFAULT 'MAIN',
     bot_token              VARCHAR(512),
     description            VARCHAR(512),
@@ -8,7 +11,6 @@ CREATE TABLE IF NOT EXISTS bot
     created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
 
 
 

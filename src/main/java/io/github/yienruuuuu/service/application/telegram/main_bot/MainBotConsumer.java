@@ -3,15 +3,13 @@ package io.github.yienruuuuu.service.application.telegram.main_bot;
 import io.github.yienruuuuu.bean.entity.Bot;
 import io.github.yienruuuuu.bean.enums.BotType;
 import io.github.yienruuuuu.config.AppConfig;
-import io.github.yienruuuuu.service.application.telegram.main_bot.dispatcher.CallbackDispatcher;
-import io.github.yienruuuuu.service.application.telegram.main_bot.dispatcher.CheckOutDispatcher;
-import io.github.yienruuuuu.service.application.telegram.main_bot.dispatcher.CommandDispatcher;
+import io.github.yienruuuuu.service.application.telegram.TelegramBotClient;
 import io.github.yienruuuuu.service.business.BotService;
-import io.github.yienruuuuu.utils.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
+import org.telegram.telegrambots.meta.api.methods.ForwardMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
 /**
@@ -23,47 +21,35 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     private final BotService botService;
     private final AppConfig appConfig;
-    //Dispatcher
-    private final CommandDispatcher commandDispatcher;
-    private final CallbackDispatcher callbackDispatcher;
-    private final CheckOutDispatcher checkOutDispatcher;
-    //handler
-    private final ChannelPostHandler channelPostHandler;
+    private final TelegramBotClient telegramBotClient;
 
 
     @Autowired
-    public MainBotConsumer(BotService botService, AppConfig appConfig, CommandDispatcher commandDispatcher, CallbackDispatcher callbackDispatcher, CheckOutDispatcher checkOutDispatcher, ChannelPostHandler channelPostHandler) {
+    public MainBotConsumer(BotService botService, AppConfig appConfig, TelegramBotClient telegramBotClient) {
         this.botService = botService;
         this.appConfig = appConfig;
-        this.commandDispatcher = commandDispatcher;
-        this.callbackDispatcher = callbackDispatcher;
-        this.checkOutDispatcher = checkOutDispatcher;
-        this.channelPostHandler = channelPostHandler;
+        this.telegramBotClient = telegramBotClient;
     }
 
     @Override
     public void consume(Update update) {
-        // 取得當前時間戳（秒）
-        long currentTimestamp = (System.currentTimeMillis() / 1000) - 600;
-        JsonUtils.parseJsonAndPrintLog("MAIN BOT CONSUMER收到Update訊息", update);
-        Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
-
-        if (update.hasMessage() && update.getMessage().hasText() && update.getMessage().getDate() > currentTimestamp) {
-            commandDispatcher.dispatch(update, mainBotEntity);
-        } else if (update.hasMessage() && update.getMessage().hasDice() && update.getMessage().getDate() > currentTimestamp) {
-            update.getMessage().setText("/dice");
-            commandDispatcher.dispatch(update, mainBotEntity);
-        } else if (update.hasCallbackQuery()) {
-            callbackDispatcher.dispatch(update, mainBotEntity);
-        } else if (update.hasPreCheckoutQuery()) { /*預支付訊息處理*/
-            checkOutDispatcher.dispatch(update, mainBotEntity);
-        } else if (update.hasMessage() && update.getMessage().hasSuccessfulPayment()) { /*支付訊息處理*/
-            checkOutDispatcher.dispatch(update, mainBotEntity);
-        } else if (update.hasChannelPost() && update.getChannelPost().getChatId().toString().equals(appConfig.getBotCommunicateChannelChatId())) {
-            channelPostHandler.handleChannelPost(update);
-        } else {
-            log.warn("MAIN BOT CONSUMER收到不支援的更新類型");
+        if (!update.hasChannelPost()) {
+            return;
         }
+
+        String sourceChannelId = String.valueOf(update.getChannelPost().getChatId());
+        if (!sourceChannelId.equals(appConfig.getBotCommunicateChannelChatId())) {
+            return;
+        }
+
+        Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
+        ForwardMessage msg = ForwardMessage.builder()
+                .chatId(appConfig.getBotPublicChannelId())
+                .fromChatId(appConfig.getBotCommunicateChannelChatId())
+                .messageId(update.getChannelPost().getMessageId())
+                .build();
+        telegramBotClient.send(msg, mainBotEntity);
+        log.info("已轉發訊息 {} 從 {} 到 {}", update.getChannelPost().getMessageId(), sourceChannelId, appConfig.getBotPublicChannelId());
     }
 }
 
