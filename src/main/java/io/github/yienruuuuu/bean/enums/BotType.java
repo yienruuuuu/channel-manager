@@ -4,7 +4,7 @@ import lombok.Getter;
 
 /**
  * @author Eric.Lee
- * Date: 2024/11/8
+ * Date: 2026/01/23
  */
 @Getter
 public enum BotType {

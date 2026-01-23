@@ -1,7 +1,7 @@
-CREATE SCHEMA IF NOT EXISTS tg_draw_bot;
+CREATE SCHEMA IF NOT EXISTS tg_manager_bot;
 
-DROP TABLE IF EXISTS tg_draw_bot.bot;
-CREATE TABLE tg_draw_bot.bot
+DROP TABLE IF EXISTS tg_manager_bot.bot;
+CREATE TABLE tg_manager_bot.bot
 (
     id                     SERIAL PRIMARY KEY,
     type                   VARCHAR(50) NOT NULL DEFAULT 'MAIN',
@@ -11,7 +11,6 @@ CREATE TABLE tg_draw_bot.bot
     created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
 
 
 

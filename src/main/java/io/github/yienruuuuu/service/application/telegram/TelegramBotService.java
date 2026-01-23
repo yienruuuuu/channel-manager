@@ -14,7 +14,8 @@ import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 /**
- * @author Eric.Lee Date: 2024/10/17
+ * @author Eric.Lee
+ * Date: 2026/01/23
  */
 @Slf4j
 @Service
@@ -27,6 +28,13 @@ public class TelegramBotService {
     private final TelegramBotClient telegramBotClient;
     private final MainBotConsumer mainBotConsumer;
 
+    /**
+     * 建立 TelegramBotService，注入主要依賴。
+     *
+     * @param mainBotConsumer 主要更新消費者
+     * @param botRepository   Bot 資料存取物件
+     * @param telegramBotClient Telegram API 呼叫封裝
+     */
     public TelegramBotService(
             MainBotConsumer mainBotConsumer,
             BotRepository botRepository,
@@ -37,6 +45,9 @@ public class TelegramBotService {
         this.mainBotConsumer = mainBotConsumer;
     }
 
+    /**
+     * 啟動後註冊機器人並更新資料庫中的 Bot 資訊。
+     */
     @PostConstruct
     public void registerBots() {
         // 初始化 TG 長輪詢應用
@@ -57,7 +68,9 @@ public class TelegramBotService {
     }
 
     /**
-     * 更新機器人資料(userName)
+     * 取得機器人自我資訊並回寫資料庫。
+     *
+     * @param botEntity 需要更新的 Bot 實體
      */
     private void updateBotData(Bot botEntity) {
         User botData = telegramBotClient.send(GetMe.builder().build(), botEntity);
@@ -65,6 +78,11 @@ public class TelegramBotService {
         botRepository.save(botEntity);
     }
 
+    /**
+     * 關閉長輪詢並釋放資源。
+     *
+     * @throws Exception 關閉過程可能拋出的例外
+     */
     @PreDestroy
     public void shutdownBot() throws Exception {
         if (botsApplication != null) {

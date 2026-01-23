@@ -8,7 +8,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * @author Eric.Lee Date: 2024/10/17
+ * @author Eric.Lee
+ * Date: 2026/01/23
  */
 @Configuration
 @Getter
@@ -19,7 +20,11 @@ public class AppConfig {
     @Value("${bot.public-channel}")
     private String botPublicChannelId;
 
-    //單例 ObjectMapper 物件
+    /**
+     * 建立全域 ObjectMapper，加入 Java 8 時間序列化支援。
+     *
+     * @return 設定完成的 ObjectMapper
+     */
     @Bean
     public ObjectMapper objectMapper() {
         ObjectMapper objectMapper = new ObjectMapper();

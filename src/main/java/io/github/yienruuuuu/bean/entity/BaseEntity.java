@@ -27,6 +27,9 @@ public abstract class BaseEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * 新增資料前寫入建立與更新時間。
+     */
     @PrePersist
     protected void onCreate() {
         Instant now = Instant.now();
@@ -34,6 +37,9 @@ public abstract class BaseEntity {
         this.updatedAt = now;
     }
 
+    /**
+     * 更新資料前刷新更新時間。
+     */
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = Instant.now();

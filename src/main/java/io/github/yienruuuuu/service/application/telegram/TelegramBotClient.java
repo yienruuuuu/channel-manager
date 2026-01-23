@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @author Eric.Lee
- * Date: 2024/10/18
+ * Date: 2026/01/23
  */
 @Component
 @Slf4j
@@ -23,13 +23,24 @@ public class TelegramBotClient {
     private final BotRepository botRepository;
     private final Map<Integer, TelegramClient> clientCache = new ConcurrentHashMap<>();
 
+    /**
+     * 建立 TelegramBotClient，負責管理 TelegramClient 快取。
+     *
+     * @param botRepository Bot 資料存取物件
+     */
     public TelegramBotClient(BotRepository botRepository) {
         this.botRepository = botRepository;
     }
 
 
     /**
-     * 通用的 send 方法，支援所有 BotApiMethod 的子類別
+     * 通用的 send 方法，支援所有 BotApiMethod 的子類別。
+     *
+     * @param method Telegram API 方法
+     * @param bot    目標 Bot
+     * @param <T>    回傳型別
+     * @param <Method> 方法型別
+     * @return API 回傳結果，失敗時回傳 null
      */
     public <T extends Serializable, Method extends BotApiMethod<T>> T send(Method method, Bot bot) {
         TelegramClient telegramClient = getOrCreateTelegramClient(bot);
@@ -42,14 +53,20 @@ public class TelegramBotClient {
     }
 
     /**
-     * 從緩存中獲取 TelegramClient，若不存在則創建並緩存
+     * 從快取中取得 TelegramClient，若不存在則建立並快取。
+     *
+     * @param bot Bot 實體
+     * @return TelegramClient
      */
     private TelegramClient getOrCreateTelegramClient(Bot bot) {
         return clientCache.computeIfAbsent(bot.getId(), this::createTelegramClient);
     }
 
     /**
-     * 根據 botId 創建 TelegramClient
+     * 依據 botId 建立 TelegramClient。
+     *
+     * @param botId Bot 主鍵
+     * @return TelegramClient
      */
     private TelegramClient createTelegramClient(Integer botId) {
         Bot bot = botRepository.findBotById(botId);
@@ -58,7 +75,10 @@ public class TelegramBotClient {
     }
 
     /**
-     * 將錯誤處理統一管理
+     * 統一處理 Telegram API 例外。
+     *
+     * @param e      例外
+     * @param action 呼叫的方法名稱
      */
     private void handleException(TelegramApiException e, String action) {
         log.error("{} 操作失敗: ", action, e);
