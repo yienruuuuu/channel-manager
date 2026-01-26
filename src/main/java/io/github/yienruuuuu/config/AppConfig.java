@@ -20,6 +20,15 @@ public class AppConfig {
     @Value("${bot.public-channel}")
     private String botPublicChannelId;
 
+    @Value("${bot.resend-channel:}")
+    private String botResendChannelId;
+
+    @Value("${bot.admin-id:}")
+    private String botAdminId;
+
+    @Value("${bot.resend-interval-ms:2000}")
+    private long botResendIntervalMs;
+
     /**
      * 建立全域 ObjectMapper，加入 Java 8 時間序列化支援。
      *

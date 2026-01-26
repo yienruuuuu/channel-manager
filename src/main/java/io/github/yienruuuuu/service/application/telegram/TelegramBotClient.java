@@ -191,6 +191,11 @@ public class TelegramBotClient {
      * @param action 呼叫的方法名稱
      */
     private void handleException(TelegramApiException e, String action) {
+        String message = e.getMessage();
+        if (message != null && message.contains("message is not modified")) {
+            log.debug("{} 無需更新: {}", action, message);
+            return;
+        }
         log.error("{} 操作失敗: ", action, e);
     }
 }

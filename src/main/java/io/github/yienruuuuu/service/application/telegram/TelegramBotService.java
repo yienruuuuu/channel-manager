@@ -10,9 +10,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
 import org.telegram.telegrambots.meta.api.methods.GetMe;
+import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
+import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.util.List;
 /**
  * @author Eric.Lee
  * Date: 2026/01/23
@@ -65,6 +68,8 @@ public class TelegramBotService {
         }
         // 更新資料庫中的 Bot 資料設定
         updateBotData(botEntity);
+        // 建立 /resend 指令
+        registerBotCommands(botEntity);
     }
 
     /**
@@ -76,6 +81,22 @@ public class TelegramBotService {
         User botData = telegramBotClient.send(GetMe.builder().build(), botEntity);
         botEntity.setBotTelegramUserName(botData.getUserName());
         botRepository.save(botEntity);
+    }
+
+    /**
+     * 註冊機器人指令，讓使用者在對話視窗快速選取。
+     *
+     * @param botEntity 需要設定指令的 Bot
+     */
+    private void registerBotCommands(Bot botEntity) {
+        SetMyCommands setMyCommands = SetMyCommands.builder()
+                .commands(
+                        List.of(
+                                new BotCommand("/resend", "重送全部歷史貼文到指定頻道")
+                        )
+                )
+                .build();
+        telegramBotClient.send(setMyCommands, botEntity);
     }
 
     /**
