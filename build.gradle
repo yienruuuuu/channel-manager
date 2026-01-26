@@ -23,6 +23,8 @@ dependencies {
     //jackson
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    //opencc4j
+    implementation 'com.github.houbb:opencc4j:1.8.0'
     //postgresql
     implementation 'org.postgresql:postgresql:42.7.4'
     //lombok

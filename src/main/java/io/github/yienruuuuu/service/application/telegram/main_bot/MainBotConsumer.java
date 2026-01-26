@@ -6,7 +6,9 @@ import io.github.yienruuuuu.bean.entity.Bot;
 import io.github.yienruuuuu.bean.enums.BotType;
 import io.github.yienruuuuu.config.AppConfig;
 import io.github.yienruuuuu.service.application.telegram.TelegramBotClient;
+import io.github.yienruuuuu.service.business.BlacklistService;
 import io.github.yienruuuuu.service.business.BotService;
+import com.github.houbb.opencc4j.util.ZhConverterUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -50,6 +52,7 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     private static final long MEDIA_GROUP_FLUSH_DELAY_MS = 2000L;
     private static final DateTimeFormatter SERIAL_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private final BotService botService;
+    private final BlacklistService blacklistService;
     private final AppConfig appConfig;
     private final TelegramBotClient telegramBotClient;
     private final ObjectMapper objectMapper;
@@ -63,13 +66,15 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
      * 建立主要更新消費者，注入必要的服務與工具。
      *
      * @param botService Bot 服務
+     * @param blacklistService 黑名單服務
      * @param appConfig  應用設定
      * @param telegramBotClient Telegram API 呼叫封裝
      * @param objectMapper JSON 序列化工具
      */
     @Autowired
-    public MainBotConsumer(BotService botService, AppConfig appConfig, TelegramBotClient telegramBotClient, ObjectMapper objectMapper) {
+    public MainBotConsumer(BotService botService, BlacklistService blacklistService, AppConfig appConfig, TelegramBotClient telegramBotClient, ObjectMapper objectMapper) {
         this.botService = botService;
+        this.blacklistService = blacklistService;
         this.appConfig = appConfig;
         this.telegramBotClient = telegramBotClient;
         this.objectMapper = objectMapper;
@@ -82,7 +87,7 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
      */
     @Override
     public void consume(Update update) {
-        logIncomingUpdateJson(update);
+        this.logIncomingUpdateJson(update);
         if (!update.hasChannelPost()) {
             return;
         }
@@ -94,16 +99,16 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         }
 
         if (isPureText(channelPost)) {
-            log.info("略過純文字訊息 {}", channelPost.getMessageId());
+            sendTextMessage(channelPost, sourceChannelId);
             return;
         }
 
         if (channelPost.getMediaGroupId() != null) {
-            bufferMediaGroupCopy(channelPost);
+            this.bufferMediaGroupCopy(channelPost);
             return;
         }
 
-        sendSingleMediaMessage(channelPost, sourceChannelId);
+        this.sendSingleMediaMessage(channelPost, sourceChannelId);
     }
 
     /**
@@ -121,21 +126,41 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     }
 
     /**
-     * 以原檔案組出單一媒體訊息，並以序號作為 caption 發送到公開頻道。
+     * 以原檔案組出單一媒體訊息，並以處理後文字加上序號作為 caption。
      *
      * @param channelPost 來源訊息
      * @param sourceChannelId 來源頻道 ID
      */
     private void sendSingleMediaMessage(Message channelPost, String sourceChannelId) {
         String serial = nextSerial();
+        String caption = buildOutputText(channelPost.getCaption(), serial);
         Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
-        boolean sent = sendSingleMedia(channelPost, serial, mainBotEntity);
+        boolean sent = sendSingleMedia(channelPost, caption, mainBotEntity);
         if (!sent) {
             log.warn("不支援的媒體型別，略過訊息 {}", channelPost.getMessageId());
             return;
         }
         sendAcknowledgement(serial, channelPost.getMessageId(), mainBotEntity);
         log.info("已發送序號 {} 對應來源 {}，送達 {}", serial, sourceChannelId, appConfig.getBotPublicChannelId());
+    }
+
+    /**
+     * 轉送純文字訊息到公開群組，並附加序號。
+     *
+     * @param channelPost 來源訊息
+     * @param sourceChannelId 來源頻道 ID
+     */
+    private void sendTextMessage(Message channelPost, String sourceChannelId) {
+        String serial = nextSerial();
+        String text = buildOutputText(channelPost.getText(), serial);
+        Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
+        SendMessage sendMessage = SendMessage.builder()
+                .chatId(appConfig.getBotPublicChannelId())
+                .text(text)
+                .build();
+        telegramBotClient.send(sendMessage, mainBotEntity);
+        sendAcknowledgement(serial, channelPost.getMessageId(), mainBotEntity);
+        log.info("已發送文字序號 {} 對應來源 {}，送達 {}", serial, sourceChannelId, appConfig.getBotPublicChannelId());
     }
 
     /**
@@ -175,8 +200,9 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         }
 
         String serial = nextSerial();
+        String caption = buildOutputText(extractMediaGroupText(messages), serial);
         Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
-        List<InputMedia> medias = buildMediaGroupMedias(messages, serial);
+        List<InputMedia> medias = buildMediaGroupMedias(messages, caption);
         if (medias.isEmpty()) {
             log.warn("media group {} 無可用媒體，略過發送", mediaGroupId);
             return;
@@ -233,14 +259,14 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     }
 
     /**
-     * 依訊息類型發送單一媒體，caption 使用序號。
+     * 依訊息類型發送單一媒體，caption 使用處理後文字。
      *
      * @param message 來源訊息
-     * @param serial  序號文字
+     * @param caption  處理後文字
      * @param bot     Bot 實體
      * @return 是否成功送出
      */
-    private boolean sendSingleMedia(Message message, String serial, Bot bot) {
+    private boolean sendSingleMedia(Message message, String caption, Bot bot) {
         if (message.hasPhoto()) {
             List<PhotoSize> photos = message.getPhoto();
             if (photos == null || photos.isEmpty()) {
@@ -250,7 +276,7 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
             SendPhoto sendPhoto = SendPhoto.builder()
                     .chatId(appConfig.getBotPublicChannelId())
                     .photo(new InputFile(fileId))
-                    .caption(serial)
+                    .caption(caption)
                     .build();
             telegramBotClient.send(sendPhoto, bot);
             return true;
@@ -260,7 +286,7 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
             SendVideo sendVideo = SendVideo.builder()
                     .chatId(appConfig.getBotPublicChannelId())
                     .video(new InputFile(fileId))
-                    .caption(serial)
+                    .caption(caption)
                     .build();
             telegramBotClient.send(sendVideo, bot);
             return true;
@@ -270,7 +296,7 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
             SendDocument sendDocument = SendDocument.builder()
                     .chatId(appConfig.getBotPublicChannelId())
                     .document(new InputFile(fileId))
-                    .caption(serial)
+                    .caption(caption)
                     .build();
             telegramBotClient.send(sendDocument, bot);
             return true;
@@ -280,7 +306,7 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
             SendAudio sendAudio = SendAudio.builder()
                     .chatId(appConfig.getBotPublicChannelId())
                     .audio(new InputFile(fileId))
-                    .caption(serial)
+                    .caption(caption)
                     .build();
             telegramBotClient.send(sendAudio, bot);
             return true;
@@ -290,7 +316,7 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
             SendAnimation sendAnimation = SendAnimation.builder()
                     .chatId(appConfig.getBotPublicChannelId())
                     .animation(new InputFile(fileId))
-                    .caption(serial)
+                    .caption(caption)
                     .build();
             telegramBotClient.send(sendAnimation, bot);
             return true;
@@ -299,13 +325,13 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     }
 
     /**
-     * 將一組訊息轉成 media group，第一則套用序號 caption。
+     * 將一組訊息轉成 media group，第一則套用處理後 caption。
      *
      * @param messages 來源訊息列表
-     * @param serial   序號文字
+     * @param caption   處理後文字
      * @return InputMedia 列表
      */
-    private List<InputMedia> buildMediaGroupMedias(List<Message> messages, String serial) {
+    private List<InputMedia> buildMediaGroupMedias(List<Message> messages, String caption) {
         List<InputMedia> medias = new ArrayList<>();
         boolean captionApplied = false;
         for (Message message : messages) {
@@ -315,12 +341,47 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
                 continue;
             }
             if (!captionApplied) {
-                media.setCaption(serial);
+                media.setCaption(caption);
                 captionApplied = true;
             }
             medias.add(media);
         }
         return medias;
+    }
+
+    /**
+     * 從 media group 中擷取第一筆文字或 caption。
+     *
+     * @param messages 來源訊息列表
+     * @return 文字內容或 null
+     */
+    private String extractMediaGroupText(List<Message> messages) {
+        for (Message message : messages) {
+            if (message.getCaption() != null && !message.getCaption().isBlank()) {
+                return message.getCaption();
+            }
+            if (message.getText() != null && !message.getText().isBlank()) {
+                return message.getText();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 先移除黑名單字串，再進行簡轉繁，最後附加序號。
+     *
+     * @param input 原始文字
+     * @param serial 序號
+     * @return 處理後文字
+     */
+    private String buildOutputText(String input, String serial) {
+        String filtered = blacklistService.filter(input);
+        String converted = filtered == null ? null : ZhConverterUtil.toTraditional(filtered);
+        String normalized = converted == null ? "" : converted.trim();
+        if (normalized.isEmpty()) {
+            return serial;
+        }
+        return normalized + " " + serial;
     }
 
     /**
