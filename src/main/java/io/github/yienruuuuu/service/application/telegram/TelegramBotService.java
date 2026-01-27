@@ -3,12 +3,14 @@ package io.github.yienruuuuu.service.application.telegram;
 import io.github.yienruuuuu.bean.entity.Bot;
 import io.github.yienruuuuu.bean.enums.BotType;
 import io.github.yienruuuuu.repository.BotRepository;
+import io.github.yienruuuuu.service.application.telegram.cashier_bot.CashierBotConsumer;
 import io.github.yienruuuuu.service.application.telegram.main_bot.MainBotConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
+import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.GetMe;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
@@ -30,6 +32,7 @@ public class TelegramBotService {
     //Telegram Client傳訊物件
     private final TelegramBotClient telegramBotClient;
     private final MainBotConsumer mainBotConsumer;
+    private final CashierBotConsumer cashierBotConsumer;
 
     /**
      * 建立 TelegramBotService，注入主要依賴。
@@ -40,12 +43,14 @@ public class TelegramBotService {
      */
     public TelegramBotService(
             MainBotConsumer mainBotConsumer,
+            CashierBotConsumer cashierBotConsumer,
             BotRepository botRepository,
             TelegramBotClient telegramBotClient
     ) {
         this.botRepository = botRepository;
         this.telegramBotClient = telegramBotClient;
         this.mainBotConsumer = mainBotConsumer;
+        this.cashierBotConsumer = cashierBotConsumer;
     }
 
     /**
@@ -55,21 +60,38 @@ public class TelegramBotService {
     public void registerBots() {
         // 初始化 TG 長輪詢應用
         botsApplication = new TelegramBotsLongPollingApplication();
-        Bot botEntity = botRepository.findBotByType(BotType.MAIN);
-        if (botEntity == null || botEntity.getBotToken() == null || botEntity.getBotToken().isBlank()) {
-            log.warn("未找到對應的 BOT 實體或 BOT TOKEN ， BotType: {}", BotType.MAIN);
+        List<Bot> bots = botRepository.findAll();
+        if (bots.isEmpty()) {
+            log.warn("未找到任何 Bot 設定，無法註冊");
             return;
         }
-        try {
-            botsApplication.registerBot(botEntity.getBotToken(), mainBotConsumer);
-            log.info("機器人 {} 註冊完成", BotType.MAIN);
-        } catch (TelegramApiException e) {
-            log.error("機器人 {} 註冊發生錯誤 , 錯誤訊息 : ", BotType.MAIN, e);
+        for (Bot botEntity : bots) {
+            if (botEntity == null || botEntity.getBotToken() == null || botEntity.getBotToken().isBlank()) {
+                log.warn("未設定 BOT TOKEN，BotType: {}", botEntity == null ? null : botEntity.getType());
+                continue;
+            }
+            var consumer = resolveConsumer(botEntity.getType());
+            if (consumer == null) {
+                log.warn("未找到對應的 consumer，BotType: {}", botEntity.getType());
+                continue;
+            }
+            try {
+                botsApplication.registerBot(botEntity.getBotToken(), consumer);
+                log.info("機器人 {} 註冊完成", botEntity.getType());
+            } catch (TelegramApiException e) {
+                log.error("機器人 {} 註冊發生錯誤 , 錯誤訊息 : ", botEntity.getType(), e);
+                continue;
+            }
+            // 更新資料庫中的 Bot 資料設定
+            updateBotData(botEntity);
+            // 建立指令
+            if (BotType.MAIN.equals(botEntity.getType())) {
+                registerBotCommands(botEntity);
+            }
+            if (BotType.CASHIER.equals(botEntity.getType())) {
+                registerCashierCommands(botEntity);
+            }
         }
-        // 更新資料庫中的 Bot 資料設定
-        updateBotData(botEntity);
-        // 建立 /resend 指令
-        registerBotCommands(botEntity);
     }
 
     /**
@@ -79,6 +101,9 @@ public class TelegramBotService {
      */
     private void updateBotData(Bot botEntity) {
         User botData = telegramBotClient.send(GetMe.builder().build(), botEntity);
+        if (botData == null) {
+            return;
+        }
         botEntity.setBotTelegramUserName(botData.getUserName());
         botRepository.save(botEntity);
     }
@@ -97,6 +122,31 @@ public class TelegramBotService {
                 )
                 .build();
         telegramBotClient.send(setMyCommands, botEntity);
+    }
+
+    private void registerCashierCommands(Bot botEntity) {
+        SetMyCommands setMyCommands = SetMyCommands.builder()
+                .commands(
+                        List.of(
+                                new BotCommand("/start", "取得收費連結"),
+                                new BotCommand("/paid", "重新取得收費連結")
+                        )
+                )
+                .build();
+        telegramBotClient.send(setMyCommands, botEntity);
+    }
+
+    private LongPollingSingleThreadUpdateConsumer resolveConsumer(BotType type) {
+        if (type == null) {
+            return null;
+        }
+        if (BotType.MAIN.equals(type)) {
+            return mainBotConsumer;
+        }
+        if (BotType.CASHIER.equals(type)) {
+            return cashierBotConsumer;
+        }
+        return null;
     }
 
     /**

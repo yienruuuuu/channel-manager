@@ -8,5 +8,6 @@ import lombok.Getter;
  */
 @Getter
 public enum BotType {
-    MAIN
+    MAIN,
+    CASHIER
 }
