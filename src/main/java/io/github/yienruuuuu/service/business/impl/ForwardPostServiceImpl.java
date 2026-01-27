@@ -112,4 +112,21 @@ public class ForwardPostServiceImpl implements ForwardPostService {
     public List<ForwardPost> findAllOrderByCreatedAtAsc() {
         return forwardPostRepository.findAllByOrderByCreatedAtAsc();
     }
+
+    @Override
+    public boolean existsByMediaFileId(String fileId) {
+        if (fileId == null || fileId.isBlank()) {
+            return false;
+        }
+        return forwardPostMediaRepository.existsByFileId(fileId);
+    }
+
+    @Override
+    public String findLatestSerialByPrefix(String serialPrefix) {
+        if (serialPrefix == null || serialPrefix.isBlank()) {
+            return null;
+        }
+        ForwardPost post = forwardPostRepository.findTopBySerialStartingWithOrderBySerialDesc(serialPrefix);
+        return post == null ? null : post.getSerial();
+    }
 }

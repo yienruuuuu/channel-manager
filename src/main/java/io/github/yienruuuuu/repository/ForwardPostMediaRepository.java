@@ -17,4 +17,12 @@ public interface ForwardPostMediaRepository extends JpaRepository<ForwardPostMed
      * @return 媒體列表
      */
     List<ForwardPostMedia> findByPostIdOrderBySortOrderAsc(String postId);
+
+    /**
+     * 判斷指定檔案 ID 是否存在。
+     *
+     * @param fileId 檔案 ID
+     * @return true 表示已存在
+     */
+    boolean existsByFileId(String fileId);
 }

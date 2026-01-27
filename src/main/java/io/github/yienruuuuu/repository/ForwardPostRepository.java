@@ -16,4 +16,6 @@ public interface ForwardPostRepository extends JpaRepository<ForwardPost, String
      * @return 貼文列表
      */
     List<ForwardPost> findAllByOrderByCreatedAtAsc();
+
+    ForwardPost findTopBySerialStartingWithOrderBySerialDesc(String serialPrefix);
 }

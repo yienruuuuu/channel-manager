@@ -13,6 +13,7 @@ import io.github.yienruuuuu.service.business.BlacklistService;
 import io.github.yienruuuuu.service.business.BotService;
 import io.github.yienruuuuu.service.business.ForwardPostService;
 import io.github.yienruuuuu.service.business.model.ForwardPostMediaItem;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -106,6 +107,20 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         this.objectMapper = objectMapper;
     }
 
+    @PostConstruct
+    private void initSerialCounter() {
+        synchronized (serialLock) {
+            LocalDate today = LocalDate.now();
+            String prefix = SERIAL_DATE_FORMAT.format(today) + "_";
+            String latestSerial = forwardPostService.findLatestSerialByPrefix(prefix);
+            currentSerialDate = today;
+            currentSerial = parseSerialIndex(latestSerial);
+            if (currentSerial > 0) {
+                log.info("序號初始化完成，最後序號 {}", latestSerial);
+            }
+        }
+    }
+
     /**
      * 處理 Telegram 更新：記錄 JSON、處理回呼、過濾來源頻道並轉送內容。
      *
@@ -197,6 +212,10 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
      * @param sourceChannelId 來源頻道 ID
      */
     private void sendSingleMediaMessage(Message channelPost, String sourceChannelId) {
+        if (isDuplicateMediaMessage(channelPost)) {
+            sendDuplicateNotice(channelPost.getMessageId());
+            return;
+        }
         String serial = nextSerial();
         String originalText = channelPost.getCaption();
         String processedText = processText(originalText);
@@ -256,6 +275,10 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
                 return;
             }
             messages = new ArrayList<>(buffer.messages);
+        }
+        if (isDuplicateMediaGroup(messages)) {
+            sendDuplicateNotice(messages.get(0).getMessageId());
+            return;
         }
 
         String serial = nextSerial();
@@ -327,6 +350,22 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
             }
             int next = ++currentSerial;
             return SERIAL_DATE_FORMAT.format(today) + "_" + String.format("%04d", next);
+        }
+    }
+
+    private int parseSerialIndex(String serial) {
+        if (serial == null || serial.isBlank()) {
+            return 0;
+        }
+        int underscoreIndex = serial.lastIndexOf('_');
+        if (underscoreIndex < 0 || underscoreIndex == serial.length() - 1) {
+            return 0;
+        }
+        String number = serial.substring(underscoreIndex + 1);
+        try {
+            return Integer.parseInt(number);
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 
@@ -665,6 +704,27 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         return null;
     }
 
+    private boolean isDuplicateMediaMessage(Message message) {
+        ForwardPostMediaItem item = buildMediaItem(message);
+        if (item == null || item.getFileId() == null || item.getFileId().isBlank()) {
+            return false;
+        }
+        return forwardPostService.existsByMediaFileId(item.getFileId());
+    }
+
+    private boolean isDuplicateMediaGroup(List<Message> messages) {
+        List<ForwardPostMediaItem> items = buildMediaItemsFromMessages(messages);
+        for (ForwardPostMediaItem item : items) {
+            if (item.getFileId() == null || item.getFileId().isBlank()) {
+                continue;
+            }
+            if (forwardPostService.existsByMediaFileId(item.getFileId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * 在來源群組回覆序號，並附上重送按鈕。
      *
@@ -680,6 +740,16 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
                 .replyToMessageId(replyToMessageId)
                 .build();
         telegramBotClient.send(sendMessage, bot);
+    }
+
+    private void sendDuplicateNotice(Integer replyToMessageId) {
+        Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
+        SendMessage sendMessage = SendMessage.builder()
+                .chatId(appConfig.getBotCommunicateChannelChatId())
+                .text("重複轉傳")
+                .replyToMessageId(replyToMessageId)
+                .build();
+        telegramBotClient.send(sendMessage, mainBotEntity);
     }
 
     /**

@@ -58,4 +58,20 @@ public interface ForwardPostService {
      * @return 貼文列表
      */
     List<ForwardPost> findAllOrderByCreatedAtAsc();
+
+    /**
+     * 取得指定前綴最新的序號。
+     *
+     * @param serialPrefix 序號前綴 (yyyy-MM-dd_)
+     * @return 序號字串，若無資料回傳 null
+     */
+    String findLatestSerialByPrefix(String serialPrefix);
+
+    /**
+     * 判斷媒體檔案是否已存在。
+     *
+     * @param fileId 檔案 ID
+     * @return true 表示已存在
+     */
+    boolean existsByMediaFileId(String fileId);
 }
