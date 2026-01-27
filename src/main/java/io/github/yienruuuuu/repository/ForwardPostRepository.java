@@ -2,6 +2,7 @@ package io.github.yienruuuuu.repository;
 
 import io.github.yienruuuuu.bean.entity.ForwardPost;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 
@@ -18,4 +19,7 @@ public interface ForwardPostRepository extends JpaRepository<ForwardPost, String
     List<ForwardPost> findAllByOrderByCreatedAtAsc();
 
     ForwardPost findTopBySerialStartingWithOrderBySerialDesc(String serialPrefix);
+
+    @Query("select p.outputText from ForwardPost p where p.outputText is not null and p.outputText <> ''")
+    List<String> findAllOutputText();
 }
