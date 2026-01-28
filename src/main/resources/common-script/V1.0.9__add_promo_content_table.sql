@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS tg_manager_bot.promo_content
+(
+    id         SERIAL PRIMARY KEY,
+    content    TEXT NOT NULL,
+    enabled    BOOLEAN DEFAULT TRUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

@@ -51,6 +51,8 @@ public class ForwardPostServiceImpl implements ForwardPostService {
             String sourceChatId,
             Integer sourceMessageId,
             String sourceMediaGroupId,
+            String forwardFromChatId,
+            String forwardFromChatTitle,
             String originalText,
             String processedText,
             String outputText,
@@ -62,6 +64,8 @@ public class ForwardPostServiceImpl implements ForwardPostService {
         post.setSourceChatId(sourceChatId);
         post.setSourceMessageId(sourceMessageId);
         post.setSourceMediaGroupId(sourceMediaGroupId);
+        post.setForwardFromChatId(forwardFromChatId);
+        post.setForwardFromChatTitle(forwardFromChatTitle);
         post.setOriginalText(originalText);
         post.setProcessedText(processedText);
         post.setOutputText(outputText);

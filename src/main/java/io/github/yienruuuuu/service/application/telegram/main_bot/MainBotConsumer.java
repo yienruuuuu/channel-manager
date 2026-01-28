@@ -9,9 +9,11 @@ import io.github.yienruuuuu.bean.entity.ForwardPostMedia;
 import io.github.yienruuuuu.bean.enums.BotType;
 import io.github.yienruuuuu.config.AppConfig;
 import io.github.yienruuuuu.service.application.telegram.TelegramBotClient;
+import io.github.yienruuuuu.service.business.ChannelSuffixService;
 import io.github.yienruuuuu.service.business.BlacklistService;
 import io.github.yienruuuuu.service.business.BotService;
 import io.github.yienruuuuu.service.business.ForwardPostService;
+import io.github.yienruuuuu.service.business.PromoContentService;
 import io.github.yienruuuuu.service.business.model.ForwardPostMediaItem;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +71,8 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     private final BotService botService;
     private final BlacklistService blacklistService;
     private final ForwardPostService forwardPostService;
+    private final ChannelSuffixService channelSuffixService;
+    private final PromoContentService promoContentService;
     private final AppConfig appConfig;
     private final TelegramBotClient telegramBotClient;
     private final ObjectMapper objectMapper;
@@ -95,6 +99,8 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
             BotService botService,
             BlacklistService blacklistService,
             ForwardPostService forwardPostService,
+            ChannelSuffixService channelSuffixService,
+            PromoContentService promoContentService,
             AppConfig appConfig,
             TelegramBotClient telegramBotClient,
             ObjectMapper objectMapper
@@ -102,6 +108,8 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         this.botService = botService;
         this.blacklistService = blacklistService;
         this.forwardPostService = forwardPostService;
+        this.channelSuffixService = channelSuffixService;
+        this.promoContentService = promoContentService;
         this.appConfig = appConfig;
         this.telegramBotClient = telegramBotClient;
         this.objectMapper = objectMapper;
@@ -173,7 +181,7 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     }
 
     /**
-     * 轉送純文字訊息到公開群組，並附加序號。
+     * 轉送純文字訊息到公開群組，並附加序號與宣傳文字。
      *
      * @param channelPost 來源訊息
      * @param sourceChannelId 來源頻道 ID
@@ -182,7 +190,15 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         String serial = nextSerial();
         String originalText = channelPost.getText();
         String processedText = processText(originalText);
-        String outputText = buildOutputText(processedText, serial);
+        String forwardFromChatId = channelPost.getForwardFromChat() == null
+                ? null
+                : String.valueOf(channelPost.getForwardFromChat().getId());
+        String forwardFromChatTitle = channelPost.getForwardFromChat() == null
+                ? null
+                : channelPost.getForwardFromChat().getTitle();
+        String promoText = promoContentService.pickRandomContent();
+        String suffixText = channelSuffixService.pickSuffixByForwardFromChatId(forwardFromChatId);
+        String outputText = buildOutputText(processedText, serial, promoText, suffixText);
         Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
 
         SendMessage sendMessage = SendMessage.builder()
@@ -196,6 +212,8 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
                 sourceChannelId,
                 channelPost.getMessageId(),
                 channelPost.getMediaGroupId(),
+                forwardFromChatId,
+                forwardFromChatTitle,
                 originalText,
                 processedText,
                 outputText,
@@ -206,7 +224,7 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     }
 
     /**
-     * 以原檔案組出單一媒體訊息，並以處理後文字加上序號作為 caption。
+     * 以原檔案組出單一媒體訊息，並以處理後文字加上序號與宣傳文字作為 caption。
      *
      * @param channelPost 來源訊息
      * @param sourceChannelId 來源頻道 ID
@@ -219,7 +237,15 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         String serial = nextSerial();
         String originalText = channelPost.getCaption();
         String processedText = processText(originalText);
-        String outputText = buildOutputText(processedText, serial);
+        String forwardFromChatId = channelPost.getForwardFromChat() == null
+                ? null
+                : String.valueOf(channelPost.getForwardFromChat().getId());
+        String forwardFromChatTitle = channelPost.getForwardFromChat() == null
+                ? null
+                : channelPost.getForwardFromChat().getTitle();
+        String promoText = promoContentService.pickRandomContent();
+        String suffixText = channelSuffixService.pickSuffixByForwardFromChatId(forwardFromChatId);
+        String outputText = buildOutputText(processedText, serial, promoText, suffixText);
         Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
         boolean sent = sendSingleMedia(channelPost, outputText, mainBotEntity);
         if (!sent) {
@@ -232,6 +258,8 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
                 sourceChannelId,
                 channelPost.getMessageId(),
                 channelPost.getMediaGroupId(),
+                forwardFromChatId,
+                forwardFromChatTitle,
                 originalText,
                 processedText,
                 outputText,
@@ -243,7 +271,7 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
 
     /**
      * 將同一個 media group 的訊息暫存，並延後 2 秒批次發送。
-     * 發送時以處理後文字與序號為 caption。
+     * 發送時以處理後文字、序號與宣傳文字為 caption。
      *
      * @param channelPost 來源訊息
      */
@@ -284,7 +312,16 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         String serial = nextSerial();
         String originalText = extractMediaGroupText(messages);
         String processedText = processText(originalText);
-        String outputText = buildOutputText(processedText, serial);
+        Message firstMessage = messages.get(0);
+        String forwardFromChatId = firstMessage.getForwardFromChat() == null
+                ? null
+                : String.valueOf(firstMessage.getForwardFromChat().getId());
+        String forwardFromChatTitle = firstMessage.getForwardFromChat() == null
+                ? null
+                : firstMessage.getForwardFromChat().getTitle();
+        String promoText = promoContentService.pickRandomContent();
+        String suffixText = channelSuffixService.pickSuffixByForwardFromChatId(forwardFromChatId);
+        String outputText = buildOutputText(processedText, serial, promoText, suffixText);
         Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
         List<InputMedia> medias = buildMediaGroupMedias(messages, outputText);
         if (medias.isEmpty()) {
@@ -302,6 +339,8 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
                 String.valueOf(messages.get(0).getChatId()),
                 messages.get(0).getMessageId(),
                 mediaGroupId,
+                forwardFromChatId,
+                forwardFromChatTitle,
                 originalText,
                 processedText,
                 outputText,
@@ -629,17 +668,27 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     }
 
     /**
-     * 將處理後文字附加序號。
+     * 將處理後文字附加序號與宣傳文字。
      *
      * @param processedText 處理後文字
      * @param serial 序號
      * @return 最終輸出文字
      */
-    private String buildOutputText(String processedText, String serial) {
-        if (processedText == null || processedText.isBlank()) {
-            return serial;
+    private String buildOutputText(String processedText, String serial, String promoText, String suffixText) {
+        List<String> parts = new ArrayList<>();
+        if (suffixText != null && !suffixText.isBlank()) {
+            parts.add(suffixText);
         }
-        return processedText + " " + serial;
+        if (processedText != null && !processedText.isBlank()) {
+            parts.add(processedText);
+        }
+        if (serial != null && !serial.isBlank()) {
+            parts.add(serial);
+        }
+        if (promoText != null && !promoText.isBlank()) {
+            parts.add(promoText);
+        }
+        return String.join(" ", parts);
     }
 
     /**

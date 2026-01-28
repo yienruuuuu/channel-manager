@@ -30,6 +30,8 @@ public interface ForwardPostService {
             String sourceChatId,
             Integer sourceMessageId,
             String sourceMediaGroupId,
+            String forwardFromChatId,
+            String forwardFromChatTitle,
             String originalText,
             String processedText,
             String outputText,
