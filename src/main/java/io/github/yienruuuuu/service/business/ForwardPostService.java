@@ -19,6 +19,11 @@ public interface ForwardPostService {
      * @param sourceChatId 來源聊天 ID
      * @param sourceMessageId 來源訊息 ID
      * @param sourceMediaGroupId 來源 media group ID
+     * @param forwardFromChatId 轉傳來源 chat ID
+     * @param forwardFromChatTitle 轉傳來源 chat 標題
+     * @param forwardFromUserId 轉傳來源 user/bot ID
+     * @param forwardFromUserUsername 轉傳來源 user/bot username
+     * @param forwardFromUserName 轉傳來源 user/bot 顯示名稱
      * @param originalText 原始文字
      * @param processedText 處理後文字
      * @param outputText 最終輸出文字
@@ -32,6 +37,9 @@ public interface ForwardPostService {
             String sourceMediaGroupId,
             String forwardFromChatId,
             String forwardFromChatTitle,
+            String forwardFromUserId,
+            String forwardFromUserUsername,
+            String forwardFromUserName,
             String originalText,
             String processedText,
             String outputText,

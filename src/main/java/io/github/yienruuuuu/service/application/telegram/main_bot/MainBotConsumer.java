@@ -40,6 +40,7 @@ import org.telegram.telegrambots.meta.api.objects.media.InputMediaDocument;
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto;
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaVideo;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
+import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
@@ -196,8 +197,13 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         String forwardFromChatTitle = channelPost.getForwardFromChat() == null
                 ? null
                 : channelPost.getForwardFromChat().getTitle();
+        ForwardFromUserInfo forwardFromUserInfo = extractForwardFromUserInfo(channelPost);
+        String forwardFromUserId = forwardFromUserInfo == null ? null : forwardFromUserInfo.id;
+        String forwardFromUserUsername = forwardFromUserInfo == null ? null : forwardFromUserInfo.username;
+        String forwardFromUserName = forwardFromUserInfo == null ? null : forwardFromUserInfo.name;
         String promoText = promoContentService.pickRandomContent();
-        String suffixText = channelSuffixService.pickSuffixByForwardFromChatId(forwardFromChatId);
+        String suffixKey = firstNonBlank(forwardFromChatId, forwardFromUserId);
+        String suffixText = channelSuffixService.pickSuffixByForwardFromChatId(suffixKey);
         String outputText = buildOutputText(processedText, serial, promoText, suffixText);
         Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
 
@@ -214,6 +220,9 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
                 channelPost.getMediaGroupId(),
                 forwardFromChatId,
                 forwardFromChatTitle,
+                forwardFromUserId,
+                forwardFromUserUsername,
+                forwardFromUserName,
                 originalText,
                 processedText,
                 outputText,
@@ -236,6 +245,12 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         }
         String serial = nextSerial();
         String originalText = channelPost.getCaption();
+        ForwardFromUserInfo forwardFromUserInfo = extractForwardFromUserInfo(channelPost);
+        String fileNameContent = resolveForwardedBotFileBaseName(channelPost, forwardFromUserInfo);
+        boolean isBotFileNameContent = isBlank(originalText) && !isBlank(fileNameContent);
+        if (isBotFileNameContent) {
+            originalText = fileNameContent;
+        }
         String processedText = processText(originalText);
         String forwardFromChatId = channelPost.getForwardFromChat() == null
                 ? null
@@ -243,9 +258,15 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         String forwardFromChatTitle = channelPost.getForwardFromChat() == null
                 ? null
                 : channelPost.getForwardFromChat().getTitle();
+        String forwardFromUserId = forwardFromUserInfo == null ? null : forwardFromUserInfo.id;
+        String forwardFromUserUsername = forwardFromUserInfo == null ? null : forwardFromUserInfo.username;
+        String forwardFromUserName = forwardFromUserInfo == null ? null : forwardFromUserInfo.name;
         String promoText = promoContentService.pickRandomContent();
-        String suffixText = channelSuffixService.pickSuffixByForwardFromChatId(forwardFromChatId);
-        String outputText = buildOutputText(processedText, serial, promoText, suffixText);
+        String suffixKey = firstNonBlank(forwardFromChatId, forwardFromUserId);
+        String suffixText = channelSuffixService.pickSuffixByForwardFromChatId(suffixKey);
+        String outputText = isBotFileNameContent
+                ? buildOutputTextWithoutSerial(processedText, promoText, suffixText)
+                : buildOutputText(processedText, serial, promoText, suffixText);
         Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
         boolean sent = sendSingleMedia(channelPost, outputText, mainBotEntity);
         if (!sent) {
@@ -260,6 +281,9 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
                 channelPost.getMediaGroupId(),
                 forwardFromChatId,
                 forwardFromChatTitle,
+                forwardFromUserId,
+                forwardFromUserUsername,
+                forwardFromUserName,
                 originalText,
                 processedText,
                 outputText,
@@ -311,6 +335,15 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
 
         String serial = nextSerial();
         String originalText = extractMediaGroupText(messages);
+        ForwardFromUserInfo forwardFromUserInfo = extractForwardFromUserInfo(messages.get(0));
+        String fileNameContent = null;
+        if (isBlank(originalText)) {
+            fileNameContent = resolveForwardedBotFileBaseName(messages, forwardFromUserInfo);
+            if (!isBlank(fileNameContent)) {
+                originalText = fileNameContent;
+            }
+        }
+        boolean isBotFileNameContent = isBlank(extractMediaGroupText(messages)) && !isBlank(fileNameContent);
         String processedText = processText(originalText);
         Message firstMessage = messages.get(0);
         String forwardFromChatId = firstMessage.getForwardFromChat() == null
@@ -319,9 +352,15 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         String forwardFromChatTitle = firstMessage.getForwardFromChat() == null
                 ? null
                 : firstMessage.getForwardFromChat().getTitle();
+        String forwardFromUserId = forwardFromUserInfo == null ? null : forwardFromUserInfo.id;
+        String forwardFromUserUsername = forwardFromUserInfo == null ? null : forwardFromUserInfo.username;
+        String forwardFromUserName = forwardFromUserInfo == null ? null : forwardFromUserInfo.name;
         String promoText = promoContentService.pickRandomContent();
-        String suffixText = channelSuffixService.pickSuffixByForwardFromChatId(forwardFromChatId);
-        String outputText = buildOutputText(processedText, serial, promoText, suffixText);
+        String suffixKey = firstNonBlank(forwardFromChatId, forwardFromUserId);
+        String suffixText = channelSuffixService.pickSuffixByForwardFromChatId(suffixKey);
+        String outputText = isBotFileNameContent
+                ? buildOutputTextWithoutSerial(processedText, promoText, suffixText)
+                : buildOutputText(processedText, serial, promoText, suffixText);
         Bot mainBotEntity = botService.findByBotType(BotType.MAIN);
         List<InputMedia> medias = buildMediaGroupMedias(messages, outputText);
         if (medias.isEmpty()) {
@@ -341,6 +380,9 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
                 mediaGroupId,
                 forwardFromChatId,
                 forwardFromChatTitle,
+                forwardFromUserId,
+                forwardFromUserUsername,
+                forwardFromUserName,
                 originalText,
                 processedText,
                 outputText,
@@ -373,6 +415,20 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     private static class MediaGroupBuffer {
         private final List<Message> messages = new ArrayList<>();
         private ScheduledFuture<?> flushFuture;
+    }
+
+    private static class ForwardFromUserInfo {
+        private final String id;
+        private final String username;
+        private final String name;
+        private final boolean isBot;
+
+        private ForwardFromUserInfo(String id, String username, String name, boolean isBot) {
+            this.id = id;
+            this.username = username;
+            this.name = name;
+            this.isBot = isBot;
+        }
     }
 
     /**
@@ -667,6 +723,88 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         return converted == null ? "" : converted.trim();
     }
 
+    private ForwardFromUserInfo extractForwardFromUserInfo(Message message) {
+        if (message == null || message.getForwardFrom() == null) {
+            return null;
+        }
+        User user = message.getForwardFrom();
+        String id = user.getId() == null ? null : String.valueOf(user.getId());
+        String username = user.getUserName();
+        String name = buildUserDisplayName(user);
+        boolean isBot = Boolean.TRUE.equals(user.getIsBot());
+        if (isBlank(id) && isBlank(username) && isBlank(name)) {
+            return null;
+        }
+        return new ForwardFromUserInfo(id, username, name, isBot);
+    }
+
+    private String buildUserDisplayName(User user) {
+        if (user == null) {
+            return null;
+        }
+        String first = user.getFirstName();
+        String last = user.getLastName();
+        if (isBlank(first) && isBlank(last)) {
+            return null;
+        }
+        if (isBlank(last)) {
+            return first == null ? null : first.trim();
+        }
+        if (isBlank(first)) {
+            return last == null ? null : last.trim();
+        }
+        return (first + " " + last).trim();
+    }
+
+    private String resolveForwardedBotFileBaseName(Message message, ForwardFromUserInfo forwardFromUserInfo) {
+        if (message == null || forwardFromUserInfo == null || !forwardFromUserInfo.isBot) {
+            return null;
+        }
+        if (!message.hasVideo() || message.getVideo() == null) {
+            return null;
+        }
+        String fileName = message.getVideo().getFileName();
+        return trimMp4Extension(fileName);
+    }
+
+    private String resolveForwardedBotFileBaseName(List<Message> messages, ForwardFromUserInfo forwardFromUserInfo) {
+        if (messages == null || messages.isEmpty() || forwardFromUserInfo == null || !forwardFromUserInfo.isBot) {
+            return null;
+        }
+        for (Message message : messages) {
+            if (message != null && message.hasVideo() && message.getVideo() != null) {
+                String fileName = message.getVideo().getFileName();
+                String baseName = trimMp4Extension(fileName);
+                if (!isBlank(baseName)) {
+                    return baseName;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String trimMp4Extension(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return null;
+        }
+        String trimmed = fileName.trim();
+        if (trimmed.toLowerCase().endsWith(".mp4")) {
+            return trimmed.substring(0, trimmed.length() - 4);
+        }
+        return trimmed;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        if (!isBlank(primary)) {
+            return primary;
+        }
+        return isBlank(fallback) ? "" : fallback;
+    }
+
     /**
      * 將處理後文字附加序號與宣傳文字。
      *
@@ -684,6 +822,20 @@ public class MainBotConsumer implements LongPollingSingleThreadUpdateConsumer {
         }
         if (serial != null && !serial.isBlank()) {
             parts.add(serial);
+        }
+        if (promoText != null && !promoText.isBlank()) {
+            parts.add(promoText);
+        }
+        return String.join(" ", parts);
+    }
+
+    private String buildOutputTextWithoutSerial(String processedText, String promoText, String suffixText) {
+        List<String> parts = new ArrayList<>();
+        if (suffixText != null && !suffixText.isBlank()) {
+            parts.add(suffixText);
+        }
+        if (processedText != null && !processedText.isBlank()) {
+            parts.add(processedText);
         }
         if (promoText != null && !promoText.isBlank()) {
             parts.add(promoText);

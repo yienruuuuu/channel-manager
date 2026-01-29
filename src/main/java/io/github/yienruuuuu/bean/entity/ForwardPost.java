@@ -38,6 +38,15 @@ public class ForwardPost extends BaseEntity {
     @Column(name = "forward_from_chat_title", length = 255)
     private String forwardFromChatTitle;
 
+    @Column(name = "forward_from_user_id", length = 64)
+    private String forwardFromUserId;
+
+    @Column(name = "forward_from_user_username", length = 255)
+    private String forwardFromUserUsername;
+
+    @Column(name = "forward_from_user_name", length = 255)
+    private String forwardFromUserName;
+
     @Column(name = "original_text", columnDefinition = "TEXT")
     private String originalText;
 
