@@ -5,6 +5,7 @@ import io.github.yienruuuuu.bean.enums.BotType;
 import io.github.yienruuuuu.repository.BotRepository;
 import io.github.yienruuuuu.service.application.telegram.cashier_bot.CashierBotConsumer;
 import io.github.yienruuuuu.service.application.telegram.main_bot.MainBotConsumer;
+import io.github.yienruuuuu.service.application.telegram.sub_bot.SubBotConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class TelegramBotService {
     private final TelegramBotClient telegramBotClient;
     private final MainBotConsumer mainBotConsumer;
     private final CashierBotConsumer cashierBotConsumer;
+    private final SubBotConsumer subBotConsumer;
 
     /**
      * 建立 TelegramBotService，注入主要依賴。
@@ -44,6 +46,7 @@ public class TelegramBotService {
     public TelegramBotService(
             MainBotConsumer mainBotConsumer,
             CashierBotConsumer cashierBotConsumer,
+            SubBotConsumer subBotConsumer,
             BotRepository botRepository,
             TelegramBotClient telegramBotClient
     ) {
@@ -51,6 +54,7 @@ public class TelegramBotService {
         this.telegramBotClient = telegramBotClient;
         this.mainBotConsumer = mainBotConsumer;
         this.cashierBotConsumer = cashierBotConsumer;
+        this.subBotConsumer = subBotConsumer;
     }
 
     /**
@@ -90,6 +94,9 @@ public class TelegramBotService {
             }
             if (BotType.CASHIER.equals(botEntity.getType())) {
                 registerCashierCommands(botEntity);
+            }
+            if (BotType.SUB.equals(botEntity.getType())) {
+                registerSubBotCommands(botEntity);
             }
         }
     }
@@ -136,6 +143,17 @@ public class TelegramBotService {
         telegramBotClient.send(setMyCommands, botEntity);
     }
 
+    private void registerSubBotCommands(Bot botEntity) {
+        SetMyCommands setMyCommands = SetMyCommands.builder()
+                .commands(
+                        List.of(
+                                new BotCommand("/resend", "重送全部歷史貼文到指定頻道")
+                        )
+                )
+                .build();
+        telegramBotClient.send(setMyCommands, botEntity);
+    }
+
     private LongPollingSingleThreadUpdateConsumer resolveConsumer(BotType type) {
         if (type == null) {
             return null;
@@ -145,6 +163,9 @@ public class TelegramBotService {
         }
         if (BotType.CASHIER.equals(type)) {
             return cashierBotConsumer;
+        }
+        if (BotType.SUB.equals(type)) {
+            return subBotConsumer;
         }
         return null;
     }

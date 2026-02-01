@@ -23,6 +23,15 @@ public class AppConfig {
     @Value("${bot.resend-channel:}")
     private String botResendChannelId;
 
+    @Value("${bot.sub.communicate-channel:}")
+    private String subCommunicateChannelChatId;
+
+    @Value("${bot.sub.public-channel:}")
+    private String subPublicChannelId;
+
+    @Value("${bot.sub.resend-channel:}")
+    private String subResendChannelId;
+
     @Value("${bot.admin-id:}")
     private String botAdminId;
 
