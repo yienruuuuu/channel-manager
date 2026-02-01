@@ -6,9 +6,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * @author Eric.Lee
@@ -24,24 +27,46 @@ public class HashtagController {
     }
 
     @GetMapping("/hashtags")
-    public List<String> listHashtags() {
+    public HashtagResponse listHashtags() {
         List<String> outputs = forwardPostRepository.findAllOutputText();
-        Set<String> result = new LinkedHashSet<>();
+        Map<String, Integer> counts = new LinkedHashMap<>();
         for (String output : outputs) {
             if (output == null || output.isBlank()) {
                 continue;
             }
-            extractHashtags(output, result);
+            extractHashtags(output, counts);
         }
-        return new ArrayList<>(result);
+        Map<String, Integer> sorted = counts.entrySet().stream()
+                .filter(entry -> entry.getValue() > 5)
+                .sorted(java.util.Comparator
+                        .comparingInt((Map.Entry<String, Integer> e) -> e.getKey().length())
+                        .thenComparing(Map.Entry::getKey))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (a, b) -> a,
+                        LinkedHashMap::new
+                ));
+        List<String> tags = new ArrayList<>(sorted.keySet());
+        return new HashtagResponse(sorted, tags);
     }
 
-    private void extractHashtags(String text, Set<String> target) {
+    private void extractHashtags(String text, Map<String, Integer> target) {
         String[] tokens = text.split("\\s+");
         for (String token : tokens) {
             if (token.startsWith("#") && token.length() > 1) {
-                target.add(token);
+                target.merge(token, 1, Integer::sum);
             }
+        }
+    }
+
+    public static class HashtagResponse {
+        public Map<String, Integer> counts;
+        public List<String> hashtags;
+
+        public HashtagResponse(Map<String, Integer> counts, List<String> hashtags) {
+            this.counts = counts;
+            this.hashtags = hashtags;
         }
     }
 }
