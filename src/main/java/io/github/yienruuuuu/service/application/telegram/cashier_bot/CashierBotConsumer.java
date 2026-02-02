@@ -128,20 +128,20 @@ public class CashierBotConsumer implements LongPollingSingleThreadUpdateConsumer
         }
         String payload = extractWishPayload(text);
         if (payload == null) {
-            sendPlainMessage(cashierBot, message.getChatId(), buildWishFormatError());
+            sendMarkdownMessage(cashierBot, message.getChatId(), buildWishTemplateMessage());
             return;
         }
-        String[] parts = payload.split("_", 4);
-        if (parts.length < 4) {
-            sendPlainMessage(cashierBot, message.getChatId(), buildWishFormatError());
+        WishPayload wishPayload = parseWishPayload(payload);
+        if (wishPayload == null) {
+            sendMarkdownMessage(cashierBot, message.getChatId(), buildWishFormatError());
             return;
         }
-        String platform = parts[0].trim();
-        String personName = parts[1].trim();
-        String wishType = parts[2].trim();
-        String otherText = parts[3].trim();
+        String platform = wishPayload.platform;
+        String personName = wishPayload.personName;
+        String wishType = wishPayload.wishType;
+        String otherText = wishPayload.otherText;
         if (isBlank(platform) || isBlank(personName) || isBlank(wishType) || isBlank(otherText)) {
-            sendPlainMessage(cashierBot, message.getChatId(), buildWishFormatError());
+            sendMarkdownMessage(cashierBot, message.getChatId(), buildWishFormatError());
             return;
         }
         if (otherText.codePointCount(0, otherText.length()) > WISH_OTHER_MAX_LENGTH) {
@@ -169,7 +169,7 @@ public class CashierBotConsumer implements LongPollingSingleThreadUpdateConsumer
         sendPlainMessage(
                 cashierBot,
                 message.getChatId(),
-                "許願已收到，30天內還可提交 " + (WISH_MONTHLY_LIMIT - used - 1) + " 次"
+                "許願已收到，本月還可提交 " + (WISH_MONTHLY_LIMIT - used - 1) + " 次"
         );
     }
 
@@ -265,14 +265,59 @@ public class CashierBotConsumer implements LongPollingSingleThreadUpdateConsumer
         return payload.isBlank() ? null : payload;
     }
 
+    private WishPayload parseWishPayload(String payload) {
+        if (payload == null) {
+            return null;
+        }
+        String[] tokens = payload.split("\\s+");
+        if (tokens.length < 4) {
+            return null;
+        }
+        if (!tokens[0].startsWith("platform=") || !tokens[1].startsWith("person=") || !tokens[2].startsWith("type=")) {
+            return null;
+        }
+        String platform = tokens[0].substring("platform=".length()).trim();
+        String person = tokens[1].substring("person=".length()).trim();
+        String type = tokens[2].substring("type=".length()).trim();
+        String otherToken = tokens[3];
+        if (!otherToken.startsWith("other=")) {
+            return null;
+        }
+        StringBuilder otherBuilder = new StringBuilder();
+        otherBuilder.append(otherToken.substring("other=".length()));
+        for (int i = 4; i < tokens.length; i++) {
+            otherBuilder.append(' ').append(tokens[i]);
+        }
+        String other = otherBuilder.toString().trim();
+        return new WishPayload(platform, person, type, other);
+    }
+
+    private String buildWishTemplateMessage() {
+        return "請複製以下格式並輸入許願資料：\n"
+                + "`/wish platform=平台 person=人名 type=類型 other=其他內容`\n"
+                + "\\(範例: `/wish platform=YouTube person=王小明 type=教學 other=想學XXX`\\)";
+    }
+
     private String buildWishFormatError() {
-        return "格式錯誤，請使用：/wish 平台_人名_類型_其他（四段必填，沒有請填「無」）";
+        return "格式錯誤，請使用：\n"
+                + "`/wish platform=平台 person=人名 type=類型 other=其他內容`\n"
+                + "\\(範例: `/wish platform=YouTube person=王小明 type=教學 other=想學XXX`\\)\n"
+                + "四段必填，沒有請填「無」";
     }
 
     private void sendPlainMessage(Bot bot, Long chatId, String text) {
         SendMessage sendMessage = SendMessage.builder()
                 .chatId(String.valueOf(chatId))
                 .text(text)
+                .build();
+        telegramBotClient.send(sendMessage, bot);
+    }
+
+    private void sendMarkdownMessage(Bot bot, Long chatId, String text) {
+        SendMessage sendMessage = SendMessage.builder()
+                .chatId(String.valueOf(chatId))
+                .text(text)
+                .parseMode("MarkdownV2")
                 .build();
         telegramBotClient.send(sendMessage, bot);
     }
@@ -284,5 +329,19 @@ public class CashierBotConsumer implements LongPollingSingleThreadUpdateConsumer
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static class WishPayload {
+        private final String platform;
+        private final String personName;
+        private final String wishType;
+        private final String otherText;
+
+        private WishPayload(String platform, String personName, String wishType, String otherText) {
+            this.platform = platform;
+            this.personName = personName;
+            this.wishType = wishType;
+            this.otherText = otherText;
+        }
     }
 }

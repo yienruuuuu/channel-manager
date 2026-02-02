@@ -137,7 +137,7 @@ public class TelegramBotService {
                         List.of(
                                 new BotCommand("/start", "取得收費連結"),
                                 new BotCommand("/paid", "重新取得收費連結"),
-                                new BotCommand("/wish", "許願 (格式：/wish 平台_人名_類型_其他)")
+                                new BotCommand("/wish", "許願 (格式：/wish platform=平台 person=人名 type=類型 other=其他)")
                         )
                 )
                 .build();
