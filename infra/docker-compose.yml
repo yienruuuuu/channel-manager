@@ -13,6 +13,23 @@ services:
       - "5432:5432"
     volumes:
       - channel_manager_pgdata:/var/lib/postgresql/data
+  app:
+    image: eclipse-temurin:17-jre
+    container_name: channel_manager_app
+    restart: unless-stopped
+    working_dir: /app
+    command: ["java", "-jar", "/app/tg_bot.jar"]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/channel_manager
+      SPRING_DATASOURCE_USERNAME: channel_manager
+      SPRING_DATASOURCE_PASSWORD: channel_manager_password
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/channel_manager
+    volumes:
+      - ../build/libs/tg_bot.jar:/app/tg_bot.jar:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
 
 volumes:
   channel_manager_pgdata:
