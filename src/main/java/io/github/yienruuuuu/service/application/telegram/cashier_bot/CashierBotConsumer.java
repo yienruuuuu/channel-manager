@@ -2,12 +2,14 @@ package io.github.yienruuuuu.service.application.telegram.cashier_bot;
 
 import io.github.yienruuuuu.bean.entity.Bot;
 import io.github.yienruuuuu.bean.entity.PaymentRecord;
+import io.github.yienruuuuu.bean.entity.Wish;
 import io.github.yienruuuuu.bean.enums.BotType;
 import io.github.yienruuuuu.config.AppConfig;
 import io.github.yienruuuuu.service.application.telegram.TelegramBotClient;
 import io.github.yienruuuuu.service.business.BotService;
 import io.github.yienruuuuu.service.business.ConfigService;
 import io.github.yienruuuuu.service.business.PaymentRecordService;
+import io.github.yienruuuuu.service.business.WishService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
@@ -20,6 +22,9 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.payments.LabeledPrice;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,24 +37,30 @@ import java.util.UUID;
 public class CashierBotConsumer implements LongPollingSingleThreadUpdateConsumer {
     private static final String CONFIG_STAR_PRICE = "cashier_star_price";
     private static final String STARS_CURRENCY = "XTR";
+    private static final String WISH_COMMAND = "/wish";
+    private static final int WISH_MONTHLY_LIMIT = 5;
+    private static final int WISH_OTHER_MAX_LENGTH = 100;
     private final BotService botService;
     private final ConfigService configService;
     private final AppConfig appConfig;
     private final TelegramBotClient telegramBotClient;
     private final PaymentRecordService paymentRecordService;
+    private final WishService wishService;
 
     public CashierBotConsumer(
             BotService botService,
             ConfigService configService,
             AppConfig appConfig,
             TelegramBotClient telegramBotClient,
-            PaymentRecordService paymentRecordService
+            PaymentRecordService paymentRecordService,
+            WishService wishService
     ) {
         this.botService = botService;
         this.configService = configService;
         this.appConfig = appConfig;
         this.telegramBotClient = telegramBotClient;
         this.paymentRecordService = paymentRecordService;
+        this.wishService = wishService;
     }
 
     @Override
@@ -77,6 +88,10 @@ public class CashierBotConsumer implements LongPollingSingleThreadUpdateConsumer
             return;
         }
         String text = message.getText().trim();
+        if (isWishCommand(text)) {
+            handleWishCommand(message, text);
+            return;
+        }
         if (!"/start".equalsIgnoreCase(text) && !"/paid".equalsIgnoreCase(text)) {
             return;
         }
@@ -100,6 +115,62 @@ public class CashierBotConsumer implements LongPollingSingleThreadUpdateConsumer
                 .prices(List.of(new LabeledPrice("Invite Link", price)))
                 .build();
         telegramBotClient.send(invoice, cashierBot);
+    }
+
+    private void handleWishCommand(Message message, String text) {
+        Bot cashierBot = botService.findByBotType(BotType.CASHIER);
+        if (cashierBot == null) {
+            log.warn("未找到 CASHIER BOT，無法處理許願");
+            return;
+        }
+        if (message.getFrom() == null) {
+            return;
+        }
+        String payload = extractWishPayload(text);
+        if (payload == null) {
+            sendPlainMessage(cashierBot, message.getChatId(), buildWishFormatError());
+            return;
+        }
+        String[] parts = payload.split("_", 4);
+        if (parts.length < 4) {
+            sendPlainMessage(cashierBot, message.getChatId(), buildWishFormatError());
+            return;
+        }
+        String platform = parts[0].trim();
+        String personName = parts[1].trim();
+        String wishType = parts[2].trim();
+        String otherText = parts[3].trim();
+        if (isBlank(platform) || isBlank(personName) || isBlank(wishType) || isBlank(otherText)) {
+            sendPlainMessage(cashierBot, message.getChatId(), buildWishFormatError());
+            return;
+        }
+        if (otherText.codePointCount(0, otherText.length()) > WISH_OTHER_MAX_LENGTH) {
+            sendPlainMessage(cashierBot, message.getChatId(), "其他欄位最多 " + WISH_OTHER_MAX_LENGTH + " 字，請縮短內容");
+            return;
+        }
+        Long userId = message.getFrom().getId();
+        Instant now = Instant.now();
+        ZoneId zoneId = ZoneId.systemDefault();
+        Instant monthStart = LocalDate.now(zoneId).withDayOfMonth(1).atStartOfDay(zoneId).toInstant();
+        long used = wishService.countByUserIdAndInsDatBetween(userId, monthStart, now);
+        if (used >= WISH_MONTHLY_LIMIT) {
+            sendPlainMessage(cashierBot, message.getChatId(), "本月許願已達上限 (" + WISH_MONTHLY_LIMIT + " 次)");
+            return;
+        }
+        Wish wish = new Wish();
+        wish.setId(UUID.randomUUID().toString());
+        wish.setUserId(userId);
+        wish.setPlatform(platform);
+        wish.setPersonName(personName);
+        wish.setWishType(wishType);
+        wish.setOtherText(otherText);
+        wish.setInsDat(now);
+        wishService.save(wish);
+        sendPlainMessage(
+                cashierBot,
+                message.getChatId(),
+                "許願已收到，30天內還可提交 " + (WISH_MONTHLY_LIMIT - used - 1) + " 次"
+        );
     }
 
     private void handleSuccessfulPayment(Message message) {
@@ -166,6 +237,38 @@ public class CashierBotConsumer implements LongPollingSingleThreadUpdateConsumer
         telegramBotClient.send(answer, cashierBot);
     }
 
+    private boolean isWishCommand(String text) {
+        if (text == null) {
+            return false;
+        }
+        String trimmed = text.trim();
+        if (!trimmed.toLowerCase().startsWith(WISH_COMMAND)) {
+            return false;
+        }
+        if (trimmed.length() == WISH_COMMAND.length()) {
+            return true;
+        }
+        char next = trimmed.charAt(WISH_COMMAND.length());
+        return next == ' ' || next == '@';
+    }
+
+    private String extractWishPayload(String text) {
+        if (text == null) {
+            return null;
+        }
+        String trimmed = text.trim();
+        int spaceIndex = trimmed.indexOf(' ');
+        if (spaceIndex < 0) {
+            return null;
+        }
+        String payload = trimmed.substring(spaceIndex + 1).trim();
+        return payload.isBlank() ? null : payload;
+    }
+
+    private String buildWishFormatError() {
+        return "格式錯誤，請使用：/wish 平台_人名_類型_其他（四段必填，沒有請填「無」）";
+    }
+
     private void sendPlainMessage(Bot bot, Long chatId, String text) {
         SendMessage sendMessage = SendMessage.builder()
                 .chatId(String.valueOf(chatId))
@@ -177,5 +280,9 @@ public class CashierBotConsumer implements LongPollingSingleThreadUpdateConsumer
     private String buildPayload(Message message) {
         String userId = message.getFrom() == null ? "unknown" : String.valueOf(message.getFrom().getId());
         return "invite_" + userId + "_" + System.currentTimeMillis();
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }
